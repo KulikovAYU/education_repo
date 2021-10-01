@@ -8,10 +8,10 @@
 
 void PrintBig1()
 {
-	for (int i = 0; i < 1000000; ++i)
+	for (int i = 0; i < 100; ++i)
 	{
 		std::cout << "thread id = " << std::this_thread::get_id() << " value = " << i << std::endl;
-		std::this_thread::sleep_for(std::chrono::seconds(10));
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 }
 

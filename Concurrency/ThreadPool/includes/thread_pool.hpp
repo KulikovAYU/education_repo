@@ -13,23 +13,19 @@ namespace stud_tpl {
 			return static_thread_pool;
 		}
 
-
 		template<typename Task>
 		static void spawn(Task&& t) {
 			auto& tp = instance();
 			tp.tasks_queue_.put(std::forward<Task>(t));
 		}
 
-
-
-
-
+	private:
 		// reserve 1 thread as an external
-		explicit thread_pool(size_t nThreadsCnt = (std::thread::hardware_concurrency() - 1)) : continue_work_flag_{true}
+		explicit thread_pool(size_t nThreadsCnt = (std::thread::hardware_concurrency() - 1)) : continue_work_flag_{ true }
 		{
 			create_and_run_workers(nThreadsCnt);
 		}
-	
+
 
 		~thread_pool()
 		{
@@ -37,7 +33,6 @@ namespace stud_tpl {
 			join_all_workers();
 		}
 
-	private:
 		void create_and_run_workers(size_t nThreadsCnt)
 		{
 			thread_pool_.reserve(nThreadsCnt);
