@@ -17,11 +17,26 @@ namespace stud_tpl {
 		static void spawn(Task&& t) {
 			auto& tp = instance();
 			tp.tasks_queue_.put(std::forward<Task>(t));
+			tp.jobs_count_at_leave_++;
+		}
+
+		static void wait()
+		{
+			auto& tp = instance();
+
+			while (tp.jobs_count_at_leave_ != tp.jobs_done_counter_ || 
+					tp.tasks_queue_.get_waiting_tasks_cnt() != 0)
+			{}
+
+			tp.jobs_count_at_leave_ = 0;
+			tp.jobs_done_counter_ = 0;
 		}
 
 	private:
 		// reserve 1 thread as an external
-		explicit thread_pool(size_t nThreadsCnt = (std::thread::hardware_concurrency() - 1)) : continue_work_flag_{ true }
+		explicit thread_pool(size_t nThreadsCnt = (std::thread::hardware_concurrency() - 1)) : continue_work_flag_{ true },
+																							   jobs_count_at_leave_{ 0 }, 
+																							   jobs_done_counter_{0}
 		{
 			create_and_run_workers(nThreadsCnt);
 		}
@@ -48,6 +63,7 @@ namespace stud_tpl {
 			{
 				task_type task = std::move(tasks_queue_.get());
 				task();
+				signal_end_of_job();
 			}
 		}
 
@@ -57,8 +73,18 @@ namespace stud_tpl {
 				worker.join();
 		}
 
+
+		void signal_end_of_job() {
+			jobs_done_counter_++;
+		}
+
 		std::vector<std::thread> thread_pool_;
 		unbounded_mpmc_queue<task_type> tasks_queue_;
 		std::atomic<bool> continue_work_flag_;
+
+
+		std::atomic<int> jobs_done_counter_;
+		std::atomic<int> jobs_count_at_leave_;
+
 	};
 }

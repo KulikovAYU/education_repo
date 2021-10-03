@@ -40,7 +40,7 @@ namespace stud_tpl
 			return take_locked();
 		}
 
-		std::atomic<std::size_t> get_waiting_tasks_cnt() const
+		size_t get_waiting_tasks_cnt() const
 		{
 			return waiting_tasks_cnt_;
 		}
@@ -60,6 +60,6 @@ namespace stud_tpl
 		std::condition_variable not_empty_;
 		std::mutex is_busy_;
 
-		std::atomic<std::size_t> waiting_tasks_cnt_;
+		std::atomic<size_t> waiting_tasks_cnt_;
 	};
 }
