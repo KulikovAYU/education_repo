@@ -10,4 +10,5 @@ int main()
 
 
 	std::vector<int, CAllocator<int>> v;
+	v.reserve(100);
 }

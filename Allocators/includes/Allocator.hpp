@@ -28,29 +28,6 @@
 const SIZE_T size = 4096;
 
 
-
-//struct MemoryArea
-//{
-//	MemoryArea()
-//	{
-//		m_mapper.InitMemory(size, true);
-//	}
-//
-//	[[nodiscard]] void* allocate(size_t n)
-//	{
-//		return m_mapper.GetMemoryChunk(n);
-//	}
-//
-//
-//	void deallocate(size_t n)
-//	{
-//		return m_mapper.FreeMemoryChunk(n);
-//	}
-//
-//	MMapTraits::MMaper m_mapper;
-//};
-
-
 template<typename T>
 struct CAllocator;
 
@@ -118,7 +95,7 @@ struct AllocatorTraits
 template<typename T>
 struct CAllocator
 {
-	template<typename> friend class CAllocator;
+	template<typename> friend struct CAllocator;
 
 public:
 	typedef size_t size_type;
@@ -158,14 +135,17 @@ public:
 		maxSize(other.maxSize) {
 	}
 
-	T* allocate(size_t n, const void* hint = nullptr) {
-		T* pointer = ptr + currentSize;
+	T* allocate(size_t countObjects) {
+		return static_cast<T*>(m_area.Alloc(countObjects));
+		
+		/*T* pointer = ptr + currentSize;
 		currentSize += n;
-		return pointer;
+		return pointer;*/
 	}
 
-	void deallocate(T* p, size_t n) {
-		currentSize -= n;
+	void deallocate(T* p, size_t countObjects) {
+		m_area.Free(p, countObjects);
+	
 	}
 
 	size_t capacity() const noexcept {
@@ -195,7 +175,7 @@ public:
 
 	template <typename... Args>
 	void construct(T* p, Args&&... args) {
-		new (p) T(forward<Args>(args)...);
+		new (p) T(std::forward<Args>(args)...);
 	}
 
 	void destroy(T* p) {
@@ -204,7 +184,7 @@ public:
 
 	[[nodiscard]] constexpr size_type max_size() const noexcept
 	{
-		return 0;
+		return 1000;
 	}
 
 
@@ -220,7 +200,7 @@ public:
 
 
 
-	MemoryPool<size> m_area;
+	BlockPool<T, size> m_area;
 };
 
 
