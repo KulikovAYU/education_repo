@@ -6,7 +6,9 @@ set(CUSTOM_ALLOC_PROJECT_NAME CustomAllocator)
 set (INC_FILES 
 includes/MMap.hpp
 includes/Allocator.hpp
-
+includes/WinMMap.hpp
+includes/LinuxMMap.hpp
+includes/PagePool.hpp
 )
 
 #src files

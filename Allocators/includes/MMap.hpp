@@ -1,190 +1,14 @@
-//https://ru.stackoverflow.com/questions/419395/Как-написать-свой-аллокатор
-#include <iostream>
+#pragma once
 
 #ifdef _WIN32
-#include <Windows.h>
-#include <tchar.h>
-#endif 
-
-#include <cassert>
-
-#if defined(UNICODE) || defined(_UNICODE)
-#define tcin std::wcin
-#define tcout std::wcout
-#else
-#define tcin std::cin
-#define tcout std::cout
+#include "WinMMap.hpp"
+#elif __linux__ 
+#include "LinuxMMap.hpp"
 #endif
 
 
-template<size_t>
-class PageWinPool;
-
-template<size_t>
-class PageLinuxPool;
-
-#ifdef _WIN32
-template<size_t PageSize>
-using MemPool = PageWinPool<PageSize>;
-// windows code goes here
-#elif __linux__ 
-template<size_t PageSize>
-using MemPool = typename PageLinuxPool<PageSize>;
-//linux code goes here
-#endif 
-
-
-//страж
-#ifdef _WIN64
-constexpr size_t BigAllocationSentinel = 0xFAFAFAFAFAFAFAFAULL;
-#else // ^^^ _WIN64 ^^^ // vvv !_WIN64 vvv
-constexpr size_t BigAllocationSentinel = 0xFAFAFAFAUL;
-#endif // _WIN64
-
-//служебная информация блока
-#ifdef _DEBUG
-constexpr size_t NonUserSize = 2*sizeof(void*); //2 - т.к. храним стража
-#else // _DEBUG
-constexpr size_t NonUserSize = sizeof(void*); //1 - т.к. стража нет
-#endif // _DEBUG
-
 //округление вверх до числа, кратного степени 2
 inline size_t align(size_t x, size_t a) { return ((x - 1) | (a - 1)) + 1; }
-
-//https://habr.com/ru/post/148657/
-//https://habr.com/ru/post/505632/ - маст хев
-
-/// <summary>
-/// Пул больших блоков (страниц) [служебная информация(указатель на след. блок)][начало блока]
-/// </summary>
-template<typename PoolImpl,size_t PageSize = 65536>
-class PagePool
-{
-public:
-
-	void* GetPage()
-	{
-		//запишем в служебные поля блока для режима _DEBUG:[сторож;указатель на начало блока;полезные данные]
-		//запишем в служебные поля блока для режима _RELEASE:[указатель на начало блока; полезные данные]
-		
-		//размер реального блока для выделения
-		const size_t blockSize = NonUserSize + PageSize;
-		void* pNewPage = GetPage(blockSize);
-		
-		//адрес начала блока как safety int
-		const uintptr_t ptrNewPage = reinterpret_cast<uintptr_t>(pNewPage);
-		
-		//блок с полезными данными
-		//смещаем указатель на величину NonUserSize
-		void* const pRealDataBlock = reinterpret_cast<void*>(ptrNewPage + NonUserSize);
-
-		//служебная запись указателя на начало блока
-		static_cast<uintptr_t*>(pRealDataBlock)[-1] = ptrNewPage;
-	
-		#ifdef _DEBUG
-		//служебная запись стража
-		static_cast<uintptr_t*>(pRealDataBlock)[-2] = BigAllocationSentinel;
-		#endif // _DEBUG
-
-		return pRealDataBlock;
-	}
-
-	/*void* GetMemoryChunk(size_t size)
-	{
-		if (m_nUsedCount + size > m_rawMemSize)
-			return nullptr;
-		
-		void* pMem = m_pHeadMemory + m_nUsedCount;
-		m_nUsedCount += size;
-	
-		return pMem;
-	}
-
-	void FreeMemoryChunk(size_t size)
-	{
-		m_rawMemSize -= size;
-	}*/
-
-protected:
-	void* GetPage(size_t size)
-	{
-		return static_cast<PoolImpl*>(this)->GetPage(size);
-	}
-
-
-protected:
-	uintptr_t* m_pHeadMemory = { nullptr }; //начало блока
-};
-
-
-/// <summary>
-/// win mmap impl
-/// </summary>
-template<size_t PageSize = 65536>
-class PageWinPool : public PagePool<PageWinPool<PageSize>>
-{
-public:
-	//для возможности вызова метода базового класса
-	using PagePool<PageWinPool<PageSize>>::GetPage;
-
-	void* GetPage(size_t size)
-	{
-		//https ://github.com/RIscRIpt/winapi_ex_mmap/blob/master/winapi_ex_mmap/main.cpp
-		HANDLE hMapping = CreateFileMapping(
-			INVALID_HANDLE_VALUE,			// hFile,
-			NULL,							// lpAttributes,
-			PAGE_READWRITE,					// flProtect,
-			size >> 32,						// dwMaximumSizeHigh,
-			size & 0xFFFFFFFF,				// dwMaximumSizeLow,
-			_T("ALLOC_SHARED_MEMORY_EX"));	// lpName
-	
-
-		if (!hMapping) {
-			tcout << _T("Failed to create file mapping!") << std::endl
-				<< _T("Error: ") << GetLastError() << std::endl;
-		}
-		if (GetLastError() == ERROR_ALREADY_EXISTS) {
-			tcout << _T("Opened already existing object.") << std::endl;
-		}
-
-
-		void* pPage = MapViewOfFile(hMapping, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-		if (!pPage)
-			tcout << _T("Failed to mapped view!");
-
-		if (!this->m_pHeadMemory)
-			this->m_pHeadMemory = static_cast<uintptr_t*>(pPage);
-		
-		CloseHandle(hMapping);
-
-		return pPage;
-	}
-
-	~PageWinPool()
-	{
-		UnmapViewOfFile(this->m_pHeadMemory);
-		//CloseHandle(m_hMapping);//подумать про деинициализацию
-	}
-};
-
-
-/// <summary>
-/// linus mmap impl
-/// </summary>
-template<size_t PageSize = 65536>
-class PageLinuxPool : public PagePool<PageLinuxPool<PageSize>>
-{
-public:
-	using PagePool<PageWinPool<PageSize>>::GetPage;
-
-	uintptr_t* GetPage(size_t size)
-	{
-		throw std::logic_error("This method is not impl");
-		return nullptr;
-	}
-
-	~PageLinuxPool() {}
-};
 
 
 //Пул блоков заданного размера
@@ -222,7 +46,7 @@ public:
 			if (i == 0)
 				pTmpHead = tmp;
 		}
-	
+
 
 		return pTmpHead;
 	}
@@ -269,7 +93,7 @@ private:
 	}
 
 
-	size_t m_blockSize  = 0;			//размер одного блока для хранения типа T
-	size_t m_count		= 0;			//кол-во блоков
-	void*  m_pHead		= { nullptr };  //начало блока
+	size_t m_blockSize = 0; //размер одного блока для хранения типа T
+	size_t m_count = 0; //кол-во блоков
+	void* m_pHead = { nullptr }; //начало блока
 };

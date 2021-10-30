@@ -1,0 +1,10 @@
+//https://ru.stackoverflow.com/questions/419395/Как-написать-свой-аллокатор
+//https://habr.com/ru/post/148657/
+//https://habr.com/ru/post/505632/ - маст хев
+
+
+//Идеи взять отсюда:
+//https://github.com/moya-lang/Allocator/blob/master/Allocator.h
+///https://codereview.stackexchange.com/questions/220113/c17-allocator-traits-implementation
+//https://github.com/dasfex/ProgrammingNotes/blob/master/cpp/topics/allocators.md - описание аллокатора
+//https://ru.stackoverflow.com/questions/419395/Как-написать-свой-аллокатор

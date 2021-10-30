@@ -1,31 +1,16 @@
-//Идеи взять отсюда:
-//https://github.com/moya-lang/Allocator/blob/master/Allocator.h
-///https://codereview.stackexchange.com/questions/220113/c17-allocator-traits-implementation
-//https://github.com/dasfex/ProgrammingNotes/blob/master/cpp/topics/allocators.md - описание аллокатора
-
-
-//https://ru.stackoverflow.com/questions/419395/Как-написать-свой-аллокатор
+#pragma once
 #include <iostream>
+#include <type_traits>
+#include <limits>
 #include "MMap.hpp"
 
-#ifdef _WIN32
-#include <Windows.h>
-#include <tchar.h>
-#endif 
+
+//
+#define NODISCARD_DEF [[nodiscard]]
+#define CONSTEXPR_DEF constexpr
 
 
-#if defined(UNICODE) || defined(_UNICODE)
-#define tcin std::wcin
-#define tcout std::wcout
-#else
-#define tcin std::cin
-#define tcout std::cout
-#endif
-
-
-
-
-const SIZE_T size = 4096;
+const size_t size = 4096;
 
 
 template<typename T>
@@ -34,60 +19,136 @@ struct CAllocator;
 template <class Alloc>
 struct AllocatorTraits
 {
-	using allocatorType = Alloc;
-	using valueType = typename Alloc::valueType;
+	using allocator_type = Alloc;
+	using value_type = typename Alloc::value_type;
 
-	using pointer = valueType*;
-	using constPointer = const valueType*;
-	using voidPointer = void*;
-	using constVoidPointer = const void*;
+	using pointer = value_type*;
+	using const_pointer = const value_type*;
+	using void_pointer = void*;
+	using const_void_pointer = const void*;
 	
 
-	using sizeType = size_t;
-	using sizeDifferenceType = ptrdiff_t;
+	using size_type = size_t;
+	using difference_type = ptrdiff_t;
+
+	//TODO: разобрать
+	/*using propagate_on_container_copy_assignment = false_type;
+	using propagate_on_container_move_assignment = true_type;
+	using propagate_on_container_swap = false_type;
+	using is_always_equal = true_type;*/
+
+	//template<class Other>
+	//using rebind_alloc = allocator<Other>;
+
+	//TODO: пока не используем
+	/*template <class _Other>
+	using rebind_traits = allocator_traits<allocator<Other>>;*/
 
 
-	/*template<typename Other>
-	using RebindAlloc = typename Allocator::rebind<Other>::other;
-
-	template<typename Other>
-	using RebindTraits = AllocatorTraits<Alloc<Other>>;*/
-
-
-	[[nodiscard]] static constexpr pointer allocate(Alloc& al, const sizeType count)
+	NODISCARD_DEF static CONSTEXPR_DEF ALLOC_PROFILER_DEF pointer allocate(Alloc& al, const size_type n)
 	{
-		return al.allocate(count);
+		return al.allocate(n);
 	}
 
-	[[nodiscard]] static constexpr pointer allocate(Alloc& al, const sizeType count, constVoidPointer hint) 
+	NODISCARD_DEF static CONSTEXPR_DEF ALLOC_PROFILER_DEF pointer allocate(Alloc& al, const size_type n, const_void_pointer hint)
 	{
-		return allocate(al, count, hint, 0);
+		return allocate_(al, n, hint, 0);
 	}
 
 
-	static constexpr void deallocate(Alloc& al, pointer p, sizeType count)
+	NODISCARD_DEF static CONSTEXPR_DEF ALLOC_PROFILER_DEF void deallocate(Alloc& al, pointer p, size_type count)
 	{
 		al.deallocate(p, count);
 	}
 
 
 	template<typename T, class... Args>
-	static constexpr void construct(Alloc& al, T* ptr, Args&&... args)
+	static CONSTEXPR_DEF void construct(Alloc& al, T* p, Args&&... args)
 	{
-		al.construct(ptr, std::forward<Args>(args)...);
+		construct_(p, std::forward<Args>(args)...);
 	}
 
 
 	template<typename T>
-	static constexpr void destroy(Alloc& al, T* ptr)
+	static CONSTEXPR_DEF void destroy(Alloc& al, T* p)
 	{
-		al.destroy(ptr);
+		destroy_(al, p, 0);
 	}
 
 
-	[[nodiscard]] static constexpr sizeType max_size(const Alloc& al) noexcept
+	NODISCARD_DEF static CONSTEXPR_DEF size_type max_size(const Alloc& al) noexcept
 	{
-		return al.max_size();
+		return max_size_(al, 0);
+	}
+
+	NODISCARD_DEF static Alloc select_on_container_copy_construction(const Alloc& rhs)
+	{
+		return soccc(rhs, 0);
+	}
+
+private:
+	//sfinae impls
+
+	static auto allocate_(Alloc& al, size_type n, const_void_pointer hint, int)
+		-> decltype(al.allocate(n, hint), void(), std::declval<pointer>())
+	{
+		return al.allocate(n, hint);
+	}
+
+	static auto allocate_(Alloc& al, size_type n, const_void_pointer, long)
+		->pointer
+	{
+		return al.allocate(n);
+	}
+
+	template <typename T, typename... Args>
+	static auto construct_(Alloc& a, T* p, int, Args&&... args)
+		-> decltype(a.construct(p, std::forward<Args>(args)...), void())
+	{
+		a.construct(p, std::forward<Args>(args)...);
+	}
+
+	template<typename T, typename... Args>
+	static void construct_(Alloc&, T* p, long, Args&&... args)
+	{
+		::new(static_cast<void*>(p)) T(std::forward<Args>(args)...);
+	}
+
+	template<typename T>
+	static auto destroy_(Alloc& a, T* p, int)
+		->decltype(a.destroy(p), void())
+	{
+		a.destroy(p);
+	}
+
+	template<typename T>
+	static void destroy_(Alloc&, T* p, long) 
+	{
+		p->~T();
+	}
+
+	static auto max_size_(const Alloc& a, int) noexcept
+		->decltype(a.max_size(), std::declval<size_type>()) 
+	{
+		return a.max_size();
+	}
+
+	static auto max_size_(const Alloc&, long) noexcept
+		-> size_type
+	{
+		//see answer https://stackoverflow.com/questions/27442885/syntax-error-with-stdnumeric-limitsmax
+		return (std::numeric_limits<size_type>::max)() / sizeof(value_type);
+	}
+
+	static auto soccc(const Alloc& rhs, int)
+		-> decltype(rhs.select_on_container_copy_construction(), std::declval<Alloc>())
+	{
+		return rhs.select_on_container_copy_construction();
+	}
+	static auto soccc(const Alloc& rhs, long)
+		-> Alloc
+	{
+		return rhs;
 	}
 
 };
